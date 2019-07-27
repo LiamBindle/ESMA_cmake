@@ -17,7 +17,7 @@ include (ecbuild_system NO_POLICY_SCOPE)
 
 list (APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/check_compiler_support")
 include ("${CMAKE_Fortran_COMPILER_ID}")
-include (check_fortran_support)
+# include (check_fortran_support)
 include (esma_check_if_debug)
 include (esma_set_this)
 include (esma_add_subdirectories)
@@ -85,7 +85,7 @@ if (PFUNIT)
 endif ()
 
 # Baselibs ...
-include (FindBaselibs)
+include (FindBaselibsCommunity)
 
 enable_testing()
 set (CMAKE_INSTALL_MESSAGE LAZY)

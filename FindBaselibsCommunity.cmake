@@ -1,39 +1,50 @@
-set (BASEDIR /does-not-exist CACHE PATH "Path to installed baselibs _including_ OS subdirectory (Linux or Darwin).")
+# Usage:
+# Set ESMA_PACKAGES_NOT_REQUIRED to GFTL_SHARED;FARGPARSE;FLAP
+# Add path to GFTLConfig.cmake to CMAKE_PREFIX_PATH to resolve that find_package
 
-if (NOT EXISTS ${BASEDIR})
-  message (FATAL_ERROR "ERROR: Must specify a value for BASEDIR with cmake ... -DBASEDIR=<path>.")
-endif ()
-if (ESMA_SDF)
-  message (FATAL_ERROR "ERROR: -hdf option was thought to be obsolete when CMake was crafted.")
-endif ()
+# [lrb]: Removed the following block. BASEDIR is not going to be used.
+#
+# set (BASEDIR /does-not-exist CACHE PATH "Path to installed baselibs _including_ OS subdirectory (Linux or Darwin).")
+#
+# if (NOT EXISTS ${BASEDIR})
+#   message (FATAL_ERROR "ERROR: Must specify a value for BASEDIR with cmake ... -DBASEDIR=<path>.")
+# endif ()
+# if (ESMA_SDF)
+#   message (FATAL_ERROR "ERROR: -hdf option was thought to be obsolete when CMake was crafted.")
+# endif ()
+#
+# link_directories (${BASEDIR}/lib)
+#
+# # Add path to GFE packages
+# list (APPEND CMAKE_PREFIX_PATH ${BASEDIR})
 
-link_directories (${BASEDIR}/lib)
-
-# Add path to GFE packages
-list (APPEND CMAKE_PREFIX_PATH ${BASEDIR})
-
-#------------------------------------------------------------------
-# netcdf
-# The following command provides the list of libraries that netcdf
-# uses.  Unfortunately it also includes the library path and "-l"
-# prefixes, which CMake handles in a different manner. So we need so
-# strip off that item from the list
-execute_process (
-  COMMAND ${BASEDIR}/bin/nf-config --flibs
-  OUTPUT_VARIABLE LIB_NETCDF
-  )
-
-string(REGEX MATCHALL " -l[^ ]*" _full_libs "${LIB_NETCDF}")
-set (NETCDF_LIBRARIES_OLD)
-foreach (lib ${_full_libs})
-  string (REPLACE "-l" "" _tmp ${lib})
-  string (STRIP ${_tmp} _tmp)
-  list (APPEND NETCDF_LIBRARIES_OLD ${_tmp})
-endforeach()
-
-list (REVERSE NETCDF_LIBRARIES_OLD)
-list (REMOVE_DUPLICATES NETCDF_LIBRARIES_OLD)
-list (REVERSE NETCDF_LIBRARIES_OLD)
+# [lrb]: Removed the following block. ecbuild's FindNetCDF.cmake can be used here.
+find_package(NetCDF 4 REQUIRED COMPONENTS C Fortran)
+find_package(HDF5 REQUIRED)
+find_package(ESMF REQUIRED)
+#
+# #------------------------------------------------------------------
+# # netcdf
+# # The following command provides the list of libraries that netcdf
+# # uses.  Unfortunately it also includes the library path and "-l"
+# # prefixes, which CMake handles in a different manner. So we need so
+# # strip off that item from the list
+# execute_process (
+#   COMMAND ${BASEDIR}/bin/nf-config --flibs
+#   OUTPUT_VARIABLE LIB_NETCDF
+#   )
+#
+# string(REGEX MATCHALL " -l[^ ]*" _full_libs "${LIB_NETCDF}")
+# set (NETCDF_LIBRARIES_OLD)
+# foreach (lib ${_full_libs})
+#   string (REPLACE "-l" "" _tmp ${lib})
+#   string (STRIP ${_tmp} _tmp)
+#   list (APPEND NETCDF_LIBRARIES_OLD ${_tmp})
+# endforeach()
+#
+# list (REVERSE NETCDF_LIBRARIES_OLD)
+# list (REMOVE_DUPLICATES NETCDF_LIBRARIES_OLD)
+# list (REVERSE NETCDF_LIBRARIES_OLD)
 
 add_definitions(-DHAS_NETCDF4)
 add_definitions(-DHAS_NETCDF3)
@@ -42,20 +53,29 @@ add_definitions(-DNETCDF_NEED_NF_MPIIO)
 add_definitions(-DHAS_NETCDF3)
 #------------------------------------------------------------------
 
-set (INC_HDF5 ${BASEDIR}/include/hdf5)
-set (INC_NETCDF ${BASEDIR}/include/netcdf)
-set (INC_HDF ${BASEDIR}/include/hdf)
-set (INC_ESMF ${BASEDIR}/include/esmf)
+set (INC_HDF5 ${HDF5_INCLUDE_DIR})
+set (INC_NETCDF ${NETCDF_INCLUDE_DIRS})
+set (INC_HDF "")
+set (INC_ESMF ${ESMF_INCLUDES_DIR} ${ESMF_HEADERS_DIR} ${ESMF_MOD_DIR})
 
-find_package(GFTL REQUIRED)
-find_package(GFTL_SHARED)
-find_package(FARGPARSE)
+find_package(GFTL REQUIRED CONFIG)
 
-set (INC_FLAP ${BASEDIR}/include/FLAP)
-set (LIB_FLAP ${BASEDIR}/lib/libflap.a)
-if (NOT EXISTS ${INC_FLAP})
-  message (FATAL_ERROR  "FLAP directory, ${INC_FLAP} does not exist.")
-endif ()
+if("GFTL_SHARED" IN_LIST ESMA_PACKAGES_NOT_REQUIRED)
+  find_package(GFTL_SHARED)
+endif()
+
+if("FARGPARSE" IN_LIST ESMA_PACKAGES_NOT_REQUIRED)
+  find_package(FARGPARSE)
+endif()
+
+if("FLAP" IN_LIST ESMA_PACKAGES_NOT_REQUIRED)
+  find_package(FLAP)
+  set (INC_FLAP ${FLAP_INCLUDE_DIRS})
+  set (LIB_FLAP FLAP)
+  if (NOT EXISTS ${INC_FLAP})
+    message (FATAL_ERROR  "FLAP directory, ${INC_FLAP} does not exist.")
+  endif ()
+endif()
 
 if (APPLE)
   if (NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
@@ -86,7 +106,6 @@ endif ()
 #find_package (NetCDF REQUIRED COMPONENTS Fortran)
 #set (INC_NETCDF ${NETCDF_INCLUDE_DIRS})
 
-set (NETCDF_LIBRARIES ${NETCDF_LIBRARIES_OLD})
 set (ESMF_LIBRARIES ${ESMF_LIBRARY} ${NETCDF_LIBRARIES} ${MPI_Fortran_LIBRARIES} ${MPI_CXX_LIBRARIES} ${stdcxx} ${libgcc})
 
 
@@ -97,10 +116,12 @@ if (PFUNIT)
   set (PFUNIT_INCLUDE_DIRS ${PFUNIT_PATH}/mod ${PFUNIT_PATH}/include)
 endif ()
 
-# BASEDIR.rc file does not have the arch
-string(REPLACE "/${CMAKE_SYSTEM_NAME}" "" BASEDIR_WITHOUT_ARCH ${BASEDIR})
-set(BASEDIR_WITHOUT_ARCH ${BASEDIR_WITHOUT_ARCH} CACHE STRING "BASEDIR without arch")
-mark_as_advanced(BASEDIR_WITHOUT_ARCH)
+# [lrb]: Removed because we aren't using BASEDIR
+#
+# # BASEDIR.rc file does not have the arch
+# string(REPLACE "/${CMAKE_SYSTEM_NAME}" "" BASEDIR_WITHOUT_ARCH ${BASEDIR})
+# set(BASEDIR_WITHOUT_ARCH ${BASEDIR_WITHOUT_ARCH} CACHE STRING "BASEDIR without arch")
+# mark_as_advanced(BASEDIR_WITHOUT_ARCH)
 
 # Set the site variable
 include(DetermineSite)
